@@ -1,0 +1,46 @@
+version: 2
+
+models:
+  - name: int_orders_items_agg
+    description: >
+      Order-level aggregation of line items.
+      One row per order_id: revenue, freight, GMV, item count, product/seller counts.
+    columns:
+      - name: order_id
+        tests:
+          - unique
+          - not_null
+      - name: revenue
+        tests:
+          - not_null
+      - name: gmv
+        tests:
+          - not_null
+
+  - name: int_orders_payments_agg
+    description: >
+      Order-level aggregation of payments.
+      Handles multi-payment orders (e.g. voucher + credit card).
+    columns:
+      - name: order_id
+        tests:
+          - unique
+          - not_null
+      - name: total_payment_value
+        tests:
+          - not_null
+
+  - name: int_orders_reviews_dedup
+    description: >
+      One review per order — de-duplicated by keeping the most recently
+      answered review. Handles the 814 duplicate review_ids in the source.
+    columns:
+      - name: order_id
+        tests:
+          - unique
+          - not_null
+      - name: review_score
+        tests:
+          - not_null
+          - accepted_values:
+              values: [1, 2, 3, 4, 5]

@@ -14,9 +14,11 @@
 5. [Step 4 — dbt Staging Layer](#5-step-4--dbt-staging-layer)
 6. [Step 5 — dbt Intermediate Layer](#6-step-5--dbt-intermediate-layer)
 7. [Step 6 — dbt Marts (Star Schema)](#7-step-6--dbt-marts-star-schema)
-8. [Key Concepts Glossary](#8-key-concepts-glossary)
-9. [How to Run Everything](#9-how-to-run-everything)
-10. [What Comes Next](#10-what-comes-next)
+8. [Step 7 — Warehouse Loading](#8-step-7--warehouse-loading)
+9. [Step 8 — Orchestration (Airflow + Docker)](#9-step-8--orchestration-airflow--docker)
+10. [Key Concepts Glossary](#10-key-concepts-glossary)
+11. [How to Run Everything](#11-how-to-run-everything)
+12. [What Comes Next](#12-what-comes-next)
 
 ---
 
@@ -475,7 +477,189 @@ left join int_orders_reviews_dedup r on o.order_id   = r.order_id
 
 ---
 
-## 8. Key Concepts Glossary
+## 8. Step 7 — Warehouse Loading
+
+**File:** [`ingestion/load_to_warehouse.py`](file:///c:/Users/user/Desktop/projects/ingestion/load_to_warehouse.py)
+
+### The problem
+
+After Steps 1–2, we have clean Parquet files sitting in `data/processed/`. But dbt runs SQL transformations **inside PostgreSQL**. We need to push the data from local files into database tables.
+
+This is the bridge:
+
+```
+data/processed/*.parquet  →  [load_to_warehouse.py]  →  PostgreSQL tables
+```
+
+### How it works
+
+```python
+def load_parquet_to_table(parquet_path, engine):
+    table_name = parquet_path.stem  # e.g. "olist_orders_dataset"
+    df = pd.read_parquet(parquet_path)
+
+    # 'replace' = drop and recreate the table on every run
+    # This is the simplest strategy for a daily-refresh pipeline
+    df.to_sql(
+        name=table_name,
+        con=engine,
+        schema="public",
+        if_exists="replace",   # full refresh each time
+        index=False,
+        method="multi",        # batch inserts for speed
+        chunksize=5000,
+    )
+```
+
+### Key concepts introduced
+
+| Concept | What it means |
+|---|---|
+| **SQLAlchemy engine** | Python object that manages the database connection pool |
+| **`to_sql()`** | pandas method that writes a DataFrame directly into a database table |
+| **`if_exists='replace'`** | Drop the table and recreate it on every run (full refresh) |
+| **`method='multi'`** | Send multiple rows per INSERT statement (faster than one-by-one) |
+| **`chunksize=5000`** | Process 5000 rows at a time to avoid memory issues with large tables |
+| **`WAREHOUSE_URL`** | Environment variable holding the connection string — keeps credentials out of code |
+
+### Connection string anatomy
+
+```
+postgresql://postgres:postgres@warehouse:5432/warehouse
+│            │        │        │         │    │
+protocol     user     password host      port database
+```
+
+- Inside Docker: host = `warehouse` (the docker-compose service name)
+- Locally: host = `localhost`
+
+### Run it
+
+```bash
+# Requires a running PostgreSQL instance
+python ingestion/load_to_warehouse.py
+```
+
+---
+
+## 9. Step 8 — Orchestration (Airflow + Docker)
+
+### The problem
+
+We have 5 scripts that must run **in order**, every day:
+1. `extract.py` — download from Kaggle
+2. `load.py` — validate and convert to Parquet
+3. `load_to_warehouse.py` — push into PostgreSQL
+4. `dbt run` — build all SQL models
+5. `dbt test` — run all schema tests
+
+Running these manually is error-prone. **Airflow** automates this.
+
+### What is Airflow?
+
+Apache Airflow is an **orchestrator** — it defines and runs sequences of tasks (called a DAG) on a schedule. Think of it as a smart cron job with:
+- A web UI to monitor runs
+- Automatic retries on failure
+- Task dependency management (Task B waits for Task A)
+- Logs for every run
+
+### The DAG
+
+**File:** [`orchestration/dags/pipeline_dag.py`](file:///c:/Users/user/Desktop/projects/orchestration/dags/pipeline_dag.py)
+
+```python
+with DAG(
+    dag_id="business_analytics_pipeline",
+    schedule="@daily",          # runs once per day
+    catchup=False,              # don't backfill past dates
+) as dag:
+
+    extract              = BashOperator(task_id="extract",              ...)
+    validate_and_parquet = BashOperator(task_id="validate_and_parquet", ...)
+    load_to_warehouse    = BashOperator(task_id="load_to_warehouse",    ...)
+    dbt_run              = BashOperator(task_id="dbt_run",              ...)
+    dbt_test             = BashOperator(task_id="dbt_test",             ...)
+
+    extract >> validate_and_parquet >> load_to_warehouse >> dbt_run >> dbt_test
+```
+
+The `>>` operator means "must complete before". This creates the flow:
+
+```
+extract → validate_and_parquet → load_to_warehouse → dbt_run → dbt_test
+```
+
+If any step fails, Airflow retries it (up to 2 times), then marks the run as failed.
+
+### Docker Compose — the full stack
+
+**File:** [`docker-compose.yml`](file:///c:/Users/user/Desktop/projects/docker-compose.yml)
+
+Docker Compose runs **5 services** in containers:
+
+| Service | Container | What it does |
+|---|---|---|
+| `warehouse` | postgres:16 | PostgreSQL database (stores raw tables + dbt models) |
+| `airflow-init` | airflow:2.9.3 | One-time setup: creates Airflow DB + admin user |
+| `airflow-webserver` | airflow:2.9.3 | Web UI at http://localhost:8080 |
+| `airflow-scheduler` | airflow:2.9.3 | Picks up and runs DAG tasks on schedule |
+| `dashboard` | custom build | Streamlit at http://localhost:8501 |
+| `api` | custom build | FastAPI at http://localhost:8000 |
+
+### How Docker Compose works
+
+```yaml
+# Shared config reused by all Airflow containers
+x-airflow-common: &airflow-common
+  image: apache/airflow:2.9.3-python3.11
+  environment:
+    WAREHOUSE_URL: postgresql://postgres:postgres@warehouse:5432/warehouse
+  volumes:
+    - ./ingestion:/opt/airflow/ingestion   # mount local code into container
+    - ./dbt:/opt/airflow/dbt
+    - ./data:/opt/airflow/data
+  depends_on:
+    warehouse:
+      condition: service_healthy   # wait for Postgres to be ready
+```
+
+Key ideas:
+- **YAML anchors** (`&airflow-common` / `<<: *airflow-common`) — avoid repeating the same config for 3 Airflow containers
+- **Volumes** — mount your local code into the container so changes are reflected without rebuilding
+- **`depends_on: service_healthy`** — the scheduler waits for Postgres to pass its health check before starting
+- **`_PIP_ADDITIONAL_REQUIREMENTS`** — installs extra Python packages inside the Airflow containers at startup
+
+### The `init-multiple-dbs.sh` script
+
+**File:** [`scripts/init-multiple-dbs.sh`](file:///c:/Users/user/Desktop/projects/scripts/init-multiple-dbs.sh)
+
+Postgres starts with one database by default. This script creates **two**:
+- `warehouse` — your data warehouse (dbt models live here)
+- `airflow` — Airflow's internal metadata database
+
+It also creates a dedicated `airflow` Postgres role, so Airflow doesn't use the superuser.
+
+### Start everything
+
+```bash
+docker compose up -d   # -d = detached (runs in background)
+```
+
+To see logs:
+```bash
+docker compose logs -f airflow-scheduler   # follow scheduler logs
+docker compose logs warehouse              # check Postgres started OK
+```
+
+To stop everything:
+```bash
+docker compose down        # stop containers, keep data
+docker compose down -v     # stop containers AND delete all data volumes
+```
+
+---
+
+## 10. Key Concepts Glossary
 
 | Term | Plain English |
 |---|---|
@@ -497,11 +681,17 @@ left join int_orders_reviews_dedup r on o.order_id   = r.order_id
 | **Primary key** | Column(s) that uniquely identify a row in a table |
 | **Foreign key** | Column that references the primary key of another table |
 | **Coalesce** | SQL function: returns the first non-null value from a list |
+| **SQLAlchemy** | Python library for connecting to databases via a unified API |
+| **Docker** | Packages an application + its dependencies into a portable container |
+| **Docker Compose** | Runs multiple Docker containers together as a single stack |
+| **Volume** | Persistent storage that survives container restarts |
+| **YAML anchor** | Reusable config block in YAML (`&name` to define, `*name` to reference) |
+| **Health check** | A command Docker runs periodically to check if a service is ready |
 | **DISTINCT ON** | PostgreSQL: keep one row per group (similar to `GROUP BY` but keeps all columns) |
 
 ---
 
-## 9. How to Run Everything
+## 11. How to Run Everything
 
 ### Prerequisites
 
@@ -523,7 +713,15 @@ python ingestion/load.py
 # Output: data/processed/*.parquet (9 files)
 ```
 
-### Step 3 — Start the full Docker stack
+### Step 3 — Load into PostgreSQL
+
+```bash
+python ingestion/load_to_warehouse.py
+# Reads data/processed/*.parquet → creates tables in PostgreSQL
+# Requires a running Postgres (either local or via docker compose up warehouse)
+```
+
+### Step 4 — Start the full Docker stack
 
 ```bash
 docker compose up -d
@@ -536,7 +734,7 @@ docker compose up -d
 | FastAPI docs | http://localhost:8000/docs | — |
 | PostgreSQL | localhost:5432 | postgres / postgres |
 
-### Step 4 — Run dbt manually
+### Step 5 — Run dbt manually
 
 ```bash
 # One-time: copy the example dbt connection profile
@@ -551,7 +749,7 @@ dbt docs serve   # browse docs at http://localhost:8080
 
 ---
 
-## 10. What Comes Next
+## 12. What Comes Next
 
 | Week | Work | Status |
 |---|---|---|
@@ -559,8 +757,9 @@ dbt docs serve   # browse docs at http://localhost:8080
 | 1 | Repo scaffolding + Git + README | ✅ Done |
 | 2 | dbt staging models (all 9 source tables) | ✅ Done |
 | 2 | dbt intermediate + marts (full star schema) | ✅ Done |
-| 3 | Airflow DAG wired into Docker Compose | 🔜 Next |
-| 4 | Streamlit KPI dashboard (revenue, delivery time, RFM segments) | 🔜 |
+| 3 | Warehouse loading (Parquet → PostgreSQL) | ✅ Done |
+| 3 | Airflow DAG + Docker Compose wiring | ✅ Done |
+| 4 | Streamlit KPI dashboard (revenue, delivery time, RFM segments) | 🔜 Next |
 | 5 | Demand forecasting (Prophet baseline + LSTM backtesting) | 🔜 |
 | 6 | FastAPI model serving + GitHub Actions CI | 🔜 |
 
@@ -574,6 +773,9 @@ data/raw/*.csv (9 CSVs)
     │  [ingestion/load.py + schemas.py]
     ▼
 data/processed/*.parquet (9 Parquet files)
+    │  [ingestion/load_to_warehouse.py]
+    ▼
+PostgreSQL tables (public.olist_orders_dataset, etc.)
     │  [dbt staging — 8 models]
     ▼
 stg_orders, stg_customers, stg_order_items,
@@ -592,6 +794,8 @@ dim_seller      → seller master with location
 dim_date        → calendar spine 2016–2019
 fact_orders     → central fact: one row per order with ALL metrics
     │
-    ▼
-Streamlit Dashboard + FastAPI Prediction API
+    ├──▶ Streamlit Dashboard (KPIs, charts, filters)
+    └──▶ FastAPI Prediction API (demand forecasts)
+
+All 5 steps orchestrated daily by Airflow DAG via Docker Compose.
 ```

@@ -1,0 +1,32 @@
+# Data (raw/processed CSVs and Parquet are not committed — regenerate via ingestion scripts)
+data/raw/*
+data/processed/*
+!data/raw/.gitkeep
+!data/processed/.gitkeep
+
+# Kaggle credentials — never commit these
+kaggle.json
+.kaggle/
+
+# dbt
+dbt/target/
+dbt/dbt_packages/
+dbt/logs/
+profiles.yml
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+venv/
+
+# Airflow
+orchestration/logs/
+airflow.db
+
+# Env files
+.env
+
+# OS/editor
+.DS_Store
+.vscode/

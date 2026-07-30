@@ -1,0 +1,25 @@
+version: 2
+
+sources:
+  - name: raw
+    schema: public
+    description: "Raw Olist Brazilian E-Commerce tables loaded by ingestion/load.py"
+    tables:
+      - name: olist_orders_dataset
+        description: "One row per order — status, timestamps, customer reference"
+      - name: olist_order_items_dataset
+        description: "Line items within each order — product, seller, price, freight"
+      - name: olist_customers_dataset
+        description: "Customer master with location (city/state/zip)"
+      - name: olist_products_dataset
+        description: "Product catalogue with dimensions and category"
+      - name: olist_order_payments_dataset
+        description: "Payment method and value per order (multiple payment types possible)"
+      - name: olist_order_reviews_dataset
+        description: "Customer review scores and comments per order"
+      - name: olist_sellers_dataset
+        description: "Seller master with location (city/state/zip)"
+      - name: olist_geolocation_dataset
+        description: "Zip-code → lat/lng mapping for geospatial analysis"
+      - name: product_category_name_translation
+        description: "Portuguese → English category name lookup"

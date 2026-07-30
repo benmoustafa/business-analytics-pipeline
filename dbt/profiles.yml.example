@@ -1,0 +1,15 @@
+# Copy this to ~/.dbt/profiles.yml (or set DBT_PROFILES_DIR) and adjust credentials.
+# Do NOT commit a version of this file with real passwords.
+
+business_analytics:
+  target: dev
+  outputs:
+    dev:
+      type: postgres
+      host: localhost   # use "warehouse" instead if running dbt from inside Docker
+      user: postgres
+      password: postgres
+      port: 5432
+      dbname: warehouse
+      schema: public
+      threads: 4

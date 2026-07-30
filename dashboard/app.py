@@ -12,6 +12,7 @@ Usage:
 """
 
 import os
+import zipfile
 from pathlib import Path
 
 import pandas as pd
@@ -35,9 +36,39 @@ st.set_page_config(
 DATA_DIR = Path(__file__).resolve().parent.parent / "data" / "processed"
 
 
+def ensure_data_available():
+    """Ensure Parquet files exist in DATA_DIR. Unpacks processed.zip if missing."""
+    DATA_DIR.mkdir(parents=True, exist_ok=True)
+    existing_parquet = list(DATA_DIR.glob("*.parquet"))
+    if len(existing_parquet) >= 9:
+        return
+
+    # Check zip location
+    zip_root = Path(__file__).resolve().parent.parent / "data" / "processed.zip"
+    zip_dir = DATA_DIR.parent / "processed.zip"
+    target_zip = zip_root if zip_root.exists() else (zip_dir if zip_dir.exists() else None)
+
+    if target_zip:
+        with zipfile.ZipFile(target_zip, "r") as zf:
+            zf.extractall(DATA_DIR)
+        return
+
+    # Download processed.zip from raw GitHub as fallback
+    github_raw_url = "https://raw.githubusercontent.com/benmoustafa/business-analytics-pipeline/main/data/processed.zip"
+    try:
+        import urllib.request
+        dl_path = DATA_DIR.parent / "processed.zip"
+        urllib.request.urlretrieve(github_raw_url, dl_path)
+        with zipfile.ZipFile(dl_path, "r") as zf:
+            zf.extractall(DATA_DIR)
+    except Exception as err:
+        st.error(f"Could not auto-download data: {err}")
+
+
 @st.cache_data(ttl=600)
 def load_data():
     """Load all datasets from local Parquet files and build the mart-equivalent DataFrames."""
+    ensure_data_available()
     orders = pd.read_parquet(DATA_DIR / "olist_orders_dataset.parquet")
     items = pd.read_parquet(DATA_DIR / "olist_order_items_dataset.parquet")
     customers = pd.read_parquet(DATA_DIR / "olist_customers_dataset.parquet")

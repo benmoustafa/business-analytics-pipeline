@@ -1,6 +1,3 @@
--- Staging model: light cleaning/renaming of the raw customers table.
--- One staging model per raw source table — no joins or business logic here yet.
-
 with source as (
     select * from {{ source('raw', 'olist_customers_dataset') }}
 )

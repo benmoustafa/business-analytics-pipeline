@@ -1,8 +1,3 @@
--- Mart: dim_date
--- One row per calendar date covering the full Olist order history (2016-2018).
--- Generated entirely in SQL — no seed file needed.
--- Materialized as a table so downstream models can join cheaply.
-
 with date_spine as (
     select
         generate_series(

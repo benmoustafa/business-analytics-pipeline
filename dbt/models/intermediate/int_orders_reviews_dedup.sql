@@ -1,7 +1,3 @@
--- Intermediate: aggregate review scores to order-level.
--- review_id is not perfectly unique in the source (814 dupes) so we
--- de-duplicate by keeping the most recent answer per order.
-
 with reviews as (
     select * from {{ ref('stg_order_reviews') }}
 ),

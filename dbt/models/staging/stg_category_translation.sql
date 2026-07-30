@@ -1,5 +1,3 @@
--- Staging model: light cleaning/renaming of the category translation lookup table.
-
 with source as (
     select * from {{ source('raw', 'product_category_name_translation') }}
 )

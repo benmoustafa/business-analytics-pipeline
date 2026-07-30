@@ -1,6 +1,3 @@
--- Intermediate: aggregate order_items up to order-level metrics.
--- One row per order_id. Used by fact_orders.
-
 with items as (
     select * from {{ ref('stg_order_items') }}
 )

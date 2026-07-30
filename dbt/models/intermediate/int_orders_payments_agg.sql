@@ -1,7 +1,3 @@
--- Intermediate: aggregate payments up to order-level.
--- An order may have multiple payment rows (e.g. voucher + credit card).
--- One row per order_id. Used by fact_orders.
-
 with payments as (
     select * from {{ ref('stg_order_payments') }}
 )

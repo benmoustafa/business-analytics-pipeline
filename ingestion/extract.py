@@ -36,23 +36,16 @@ def _kaggle_credentials_available() -> bool:
 
 
 def setup_kaggle_credentials() -> None:
-    """Prompt the user for Kaggle credentials and create kaggle.json if missing."""
+    """Prompt for Kaggle API credentials and write ~/.kaggle/kaggle.json if missing."""
     if _kaggle_credentials_available():
         return
 
-    logger.info("Kaggle API credentials not found.")
-    print("\n" + "=" * 60)
-    print("SETTING UP KAGGLE API CREDENTIALS")
-    print("=" * 60)
-    print("To download the dataset, you need both your Kaggle Username and API Key.")
-    print("1. Find your Username in your Kaggle profile URL.")
-    print("   (e.g., for https://www.kaggle.com/johndoe, the username is 'johndoe')\n")
-    
-    username = input("Enter your Kaggle username: ").strip()
-    key = input("Enter your Kaggle API key (e.g. KGAT_66c6...): ").strip()
+    logger.info("Kaggle API credentials not configured. Please enter your credentials:")
+    username = input("Kaggle Username: ").strip()
+    key = input("Kaggle API Key: ").strip()
 
     if not username or not key:
-        logger.error("Both Username and Key are required to authenticate.")
+        logger.error("Both username and API key are required.")
         raise SystemExit(1)
 
     kaggle_dir = Path.home() / ".kaggle"
@@ -63,7 +56,7 @@ def setup_kaggle_credentials() -> None:
     with open(kaggle_json, "w") as f:
         json.dump({"username": username, "key": key}, f)
         
-    logger.info("Credentials saved successfully to %s\n", kaggle_json)
+    logger.info("Credentials saved to %s", kaggle_json)
 
 
 def download_dataset() -> None:

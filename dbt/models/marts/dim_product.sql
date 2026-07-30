@@ -1,7 +1,3 @@
--- Mart: dim_product
--- One row per product_id.
--- Joins to the category translation table so we always have the English name.
-
 with products as (
     select * from {{ ref('stg_products') }}
 ),

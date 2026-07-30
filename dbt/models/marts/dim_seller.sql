@@ -1,6 +1,3 @@
--- Mart: dim_seller
--- One row per seller_id.
-
 with sellers as (
     select * from {{ ref('stg_sellers') }}
 )

@@ -1,6 +1,3 @@
--- Staging model: light cleaning/renaming of the raw order_reviews table.
--- Note: review_id is not perfectly unique in the source (814 dupes detected in ingestion).
-
 with source as (
     select * from {{ source('raw', 'olist_order_reviews_dataset') }}
 )

@@ -1,15 +1,3 @@
--- Mart: fact_orders
--- The central fact table of the star schema.
--- One row per order_id — joins all dimension and intermediate models together.
---
--- Star schema relationships:
---   fact_orders → dim_customer   (customer_key)
---   fact_orders → dim_date       (purchase_date_key, delivered_date_key)
---   fact_orders → dim_seller     (via order_items — see note below)
---
--- NOTE: because one order can involve multiple sellers we do NOT add seller_key
--- here — that relationship lives in a separate fact_order_items bridge if needed.
-
 with orders as (
     select * from {{ ref('stg_orders') }}
 ),

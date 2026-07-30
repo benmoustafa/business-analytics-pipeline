@@ -1,7 +1,3 @@
--- Staging model: light cleaning/renaming of the raw products table.
--- product_category_name has ~610 nulls — handled later in the mart with a coalesce join
--- to product_category_name_translation.
-
 with source as (
     select * from {{ source('raw', 'olist_products_dataset') }}
 )

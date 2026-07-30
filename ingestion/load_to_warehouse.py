@@ -1,18 +1,8 @@
 """
-ingestion/load_to_warehouse.py
-
-Reads the validated Parquet files from data/processed/ and loads them into
-PostgreSQL tables in the 'warehouse' database. This bridges the gap between
-the local file-based ingestion and the dbt transformation layer.
-
-Each CSV/Parquet is loaded into a table whose name matches the original
-filename (minus extension), e.g. olist_orders_dataset.parquet → public.olist_orders_dataset.
+Loads validated Parquet files from data/processed/ into PostgreSQL warehouse tables.
 
 Usage:
     python ingestion/load_to_warehouse.py
-
-    Set WAREHOUSE_URL env var to override the default connection string:
-        WAREHOUSE_URL=postgresql://user:pass@host:5432/dbname python ingestion/load_to_warehouse.py
 """
 
 import logging

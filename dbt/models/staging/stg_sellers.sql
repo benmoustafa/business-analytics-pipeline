@@ -1,5 +1,3 @@
--- Staging model: light cleaning/renaming of the raw sellers table.
-
 with source as (
     select * from {{ source('raw', 'olist_sellers_dataset') }}
 )

@@ -110,7 +110,7 @@ dbt docs generate && dbt docs serve
 - [x] dbt intermediate (3 aggregation/dedup models)
 - [x] dbt marts — full star schema (fact_orders + 4 dimensions)
 - [x] Airflow DAG (5-step pipeline: extract → validate → warehouse → dbt run → dbt test)
-- [ ] Streamlit KPI dashboard (revenue, delivery time, RFM segments)
+- [x] Streamlit KPI dashboard (revenue, delivery time, RFM segments)
 - [ ] Demand forecasting model (Prophet baseline + LSTM)
 - [ ] FastAPI model serving wired to trained model
 

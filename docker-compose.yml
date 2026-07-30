@@ -7,14 +7,16 @@ x-airflow-common: &airflow-common
     AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://airflow:airflow@warehouse/airflow
     AIRFLOW__CORE__LOAD_EXAMPLES: "false"
     AIRFLOW__WEBSERVER__EXPOSE_CONFIG: "true"
-    _PIP_ADDITIONAL_REQUIREMENTS: "dbt-core dbt-postgres kaggle pandas pyarrow"
+    WAREHOUSE_URL: postgresql://postgres:postgres@warehouse:5432/warehouse
+    _PIP_ADDITIONAL_REQUIREMENTS: "dbt-core dbt-postgres kaggle pandas pyarrow sqlalchemy psycopg2-binary"
   volumes:
     - ./orchestration/dags:/opt/airflow/dags
     - ./ingestion:/opt/airflow/ingestion
     - ./dbt:/opt/airflow/dbt
     - ./data:/opt/airflow/data
   depends_on:
-    - warehouse
+    warehouse:
+      condition: service_healthy
 
 services:
   # --- Data warehouse (also hosts the Airflow metadata DB, in a separate database) ---
@@ -35,15 +37,22 @@ services:
       interval: 5s
       retries: 5
 
-  # --- Airflow (single-container webserver + scheduler, LocalExecutor — simplified for portfolio use) ---
+  # --- Airflow init (runs once on first start: DB migration + admin user) ---
   airflow-init:
     <<: *airflow-common
     container_name: airflow-init
     entrypoint: /bin/bash
     command:
       - -c
-      - "airflow db init && airflow users create --username admin --password admin --firstname Admin --lastname User --role Admin --email admin@example.com"
+      - >
+        airflow db init &&
+        airflow users create
+        --username admin --password admin
+        --firstname Admin --lastname User
+        --role Admin --email admin@example.com
+    restart: "no"
 
+  # --- Airflow webserver (UI at localhost:8080) ---
   airflow-webserver:
     <<: *airflow-common
     container_name: airflow-webserver
@@ -51,14 +60,17 @@ services:
     ports:
       - "8080:8080"
     depends_on:
-      - airflow-init
+      airflow-init:
+        condition: service_completed_successfully
 
+  # --- Airflow scheduler (picks up and runs DAG tasks) ---
   airflow-scheduler:
     <<: *airflow-common
     container_name: airflow-scheduler
     command: scheduler
     depends_on:
-      - airflow-init
+      airflow-init:
+        condition: service_completed_successfully
 
   # --- Streamlit dashboard ---
   dashboard:
@@ -69,7 +81,8 @@ services:
     ports:
       - "8501:8501"
     depends_on:
-      - warehouse
+      warehouse:
+        condition: service_healthy
 
   # --- FastAPI prediction serving ---
   api:
@@ -80,7 +93,8 @@ services:
     ports:
       - "8000:8000"
     depends_on:
-      - warehouse
+      warehouse:
+        condition: service_healthy
 
 volumes:
   warehouse_data:

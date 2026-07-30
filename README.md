@@ -257,9 +257,9 @@ docker compose up -d
 
 ## 👤 Author
 
-**Moustafa Ben Abdelhadi**
+**Benabdelhadi Moustafa**
 - GitHub: [@benmoustafa](https://github.com/benmoustafa)
-- LinkedIn: [moustafabenabdelhadi](https://linkedin.com/in/moustafabenabdelhadi)
+- LinkedIn: [Benabdelhadi Moustafa](https://www.linkedin.com/in/moustafa-benabdelhadi-780448320)
 
 ---
 
